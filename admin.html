@@ -1,0 +1,113 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="noindex,nofollow"><meta name=referrer content=strict-origin-when-cross-origin>
+<title>Rodrigo · Friends Map</title>
+<link rel=stylesheet href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#0f1117;--card:#171a23;--ink:#e8eaf0;--mut:#8b90a0;--line:#262a36;--acc:#60a5fa}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)}
+h1{font-size:1.2rem;margin:0}main{padding:16px 20px;max-width:1400px;margin:0 auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}.kpi b{font-size:1.7rem;display:block}.kpi span{color:var(--mut);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:16px}
+.card h2{font-size:.9rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 10px}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}@media(max-width:900px){.grid{grid-template-columns:1fr}}
+#map{height:460px;border-radius:10px}
+input,select,button,a.b{background:#0b0d13;color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:8px 10px;font:inherit;font-size:.9rem;text-decoration:none}
+button,a.b{cursor:pointer}a.b.pr{background:var(--acc);color:#0b0d13;border:0;font-weight:600}
+.filters{display:flex;flex-wrap:wrap;gap:8px}
+.tl{overflow-x:auto}.tl table{border-collapse:collapse;font-size:.78rem;min-width:100%}
+.tl th,.tl td{border-bottom:1px solid var(--line);padding:4px 2px;text-align:center;white-space:nowrap}
+.tl th{color:var(--mut);font-weight:500;position:sticky;top:0;background:var(--card)}
+.tl td.lab{text-align:left;padding-right:12px;position:sticky;left:0;background:var(--card);max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.cell{height:22px;border-radius:5px;margin:0 1px;color:#0b0d13;font-weight:700;line-height:22px}
+.now{outline:1px dashed #fbbf24}
+.city{border-top:1px solid var(--line);padding:10px 0}.city h3{margin:0 0 6px;font-size:1rem;display:flex;justify-content:space-between}
+.pill{font-size:.72rem;background:#1f2937;color:#fbbf24;border-radius:20px;padding:2px 8px}
+.ent{display:flex;justify-content:space-between;gap:8px;padding:5px 0;font-size:.9rem}.ent .m{color:var(--mut);font-size:.8rem}
+.ent form button{padding:2px 7px;font-size:.75rem;color:#f87171}
+.empty{color:var(--mut);padding:30px;text-align:center}
+.leaflet-popup-content{color:#111}
+</style></head><body>
+<header><h1>🌍 Friends Map · Rodrigo's trip planner</h1>
+<div class=filters><span id=status style="color:var(--mut);font-size:.85rem;align-self:center"></span><button onclick="load()">↻ Refresh</button><button class="b pr" onclick="csv()">⬇ CSV</button><button onclick="logout()">Log out</button></div></header>
+<div id=login style="position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999">
+<form id=lf class=card style="width:min(380px,90vw)"><h2 style="color:var(--ink);font-size:1.1rem;text-transform:none">🔒 Admin key</h2>
+<input type=password id=key placeholder="Admin key" style="width:100%;margin-bottom:10px" autocomplete=current-password><div id=lerr style="color:#f87171;font-size:.85rem;margin-bottom:8px"></div>
+<button class="b pr" style="width:100%;padding:10px">Unlock</button><p style="color:var(--mut);font-size:.75rem">Stored only in this browser (localStorage).</p></form></div><main>
+<div class=kpis><div class=kpi><b id=k1>–</b><span>Friends</span></div><div class=kpi><b id=k2>–</b><span>Stops</span></div><div class=kpi><b id=k3>–</b><span>Cities</span></div><div class=kpi><b id=k4>–</b><span>Overlap cities</span></div><div class=kpi><b id=k5>–</b><span>Next arrival</span></div></div>
+<div class="card filters"><input id=q placeholder="Search name, city, note…" style="flex:1;min-width:180px">
+<label style="color:var(--mut);font-size:.85rem;align-self:center">From</label><input type=date id=from><label style="color:var(--mut);font-size:.85rem;align-self:center">To</label><input type=date id=to>
+<select id=group><option value=city>Timeline by city</option><option value=name>Timeline by friend</option></select><button onclick="reset()">Reset</button></div>
+<div class=card><h2>Timeline · weeks (number = friends there that week)</h2><div class=tl id=tl></div></div>
+<div class=grid><div class=card><h2>Map</h2><div id=map></div></div>
+<div class=card><h2>By city · date</h2><div id=list></div></div></div>
+</main>
+<script src=config.js></script><script src=api.js></script>
+<script>
+let DATA=[];const $=id=>document.getElementById(id);
+const esc=s=>(s??'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const D=s=>new Date(s+'T00:00:00');const fmt=s=>D(s).toLocaleDateString(undefined,{month:'short',day:'numeric'});
+const monday=d=>{d=new Date(d);const k=(d.getDay()+6)%7;d.setDate(d.getDate()-k);d.setHours(0,0,0,0);return d};
+const ckey=c=>c.trim().toLowerCase();
+const map=L.map('map').setView([30,0],2);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
+const layer=L.layerGroup().addTo(map);
+function filtered(){const q=$('q').value.toLowerCase(),f=$('from').value,t=$('to').value;
+ return DATA.filter(r=>(!q||[r.name,r.city,r.note,r.contact].join(' ').toLowerCase().includes(q))&&(!f||r.end>=f)&&(!t||r.start<=t));}
+function overlaps(rows){const by={};rows.forEach(r=>(by[ckey(r.city)]=by[ckey(r.city)]||[]).push(r));const o={};
+ for(const k in by){const a=by[k];for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)if(a[i].name!==a[j].name&&a[i].start<=a[j].end&&a[j].start<=a[i].end)o[k]=1;}return o;}
+function render(){const rows=filtered();const ov=overlaps(rows);const today=new Date().toISOString().slice(0,10);
+ $('k1').textContent=new Set(rows.map(r=>r.name)).size;$('k2').textContent=rows.length;$('k3').textContent=new Set(rows.map(r=>ckey(r.city))).size;$('k4').textContent=Object.keys(ov).length;
+ const nx=rows.filter(r=>r.start>=today).sort((a,b)=>a.start.localeCompare(b.start))[0];$('k5').textContent=nx?fmt(nx.start):'–';
+ if(!rows.length){$('tl').innerHTML=$('list').innerHTML='<div class=empty>No entries yet — share the link with friends!</div>';layer.clearLayers();return;}
+ // timeline
+ let s=monday(D(rows.reduce((m,r)=>r.start<m?r.start:m,'9999')));if($('from').value)s=monday(D($('from').value));
+ let e=D(rows.reduce((m,r)=>r.end>m?r.end:m,'0000'));if($('to').value)e=D($('to').value);
+ const weeks=[];for(let d=new Date(s);d<=e&&weeks.length<60;d.setDate(d.getDate()+7))weeks.push(new Date(d));
+ const g=$('group').value;const groups={};rows.forEach(r=>{const k=g==='city'?r.city.trim():r.name;(groups[k]=groups[k]||[]).push(r)});
+ const keys=Object.keys(groups).sort((a,b)=>groups[a].reduce((m,r)=>r.start<m?r.start:m,'9')<groups[b].reduce((m,r)=>r.start<m?r.start:m,'9')?-1:1);
+ const tw=monday(new Date()).getTime();
+ let h='<table><tr><th></th>'+weeks.map(w=>`<th class="${w.getTime()===tw?'now':''}">${w.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</th>`).join('')+'</tr>';
+ keys.forEach(k=>{h+=`<tr><td class=lab title="${esc(k)}">${g==='city'&&ov[ckey(k)]?'⭐ ':''}${esc(k)}</td>`;
+  weeks.forEach(w=>{const we=new Date(w);we.setDate(we.getDate()+6);const ws=w.toISOString().slice(0,10),wee=we.toISOString().slice(0,10);
+   const here=groups[k].filter(r=>r.start<=wee&&r.end>=ws);const n=new Set(here.map(r=>g==='city'?r.name:r.city)).size;
+   const tip=here.map(r=>`${r.name} @ ${r.city} ${r.start}→${r.end}`).join('\n');
+   h+=`<td title="${esc(tip)}">${n?`<div class=cell style="background:${n>1?'#fbbf24':'#60a5fa'}">${g==='city'?n:''}</div>`:''}</td>`});h+='</tr>'});
+ $('tl').innerHTML=h+'</table>';
+ // list grouped by city
+ const bc={};rows.forEach(r=>(bc[ckey(r.city)]=bc[ckey(r.city)]||[]).push(r));
+ $('list').innerHTML=Object.entries(bc).sort((a,b)=>a[1][0].start.localeCompare(b[1][0].start)).map(([k,a])=>`<div class=city><h3><span>📍 ${esc(a[0].city)}</span>${ov[k]?'<span class=pill>overlap</span>':''}</h3>`+
+  a.sort((x,y)=>x.start.localeCompare(y.start)).map(r=>`<div class=ent><div><b>${esc(r.name)}</b> · ${fmt(r.start)} → ${fmt(r.end)}${r.note?`<div class=m>${esc(r.note)}</div>`:''}${r.contact?`<div class=m>☎ ${esc(r.contact)}</div>`:''}</div></div>`).join('')+'</div>').join('');
+ // map
+ layer.clearLayers();const pts=[];const bm={};rows.filter(r=>r.lat!=null).forEach(r=>(bm[r.lat+','+r.lon]=bm[r.lat+','+r.lon]||[]).push(r));
+ for(const k in bm){const a=bm[k];const ll=[a[0].lat,a[0].lon];pts.push(ll);
+  L.circleMarker(ll,{radius:7+Math.min(a.length*3,15),color:a.length>1?'#f59e0b':'#2563eb',fillOpacity:.75}).bindPopup(`<b>${esc(a[0].city)}</b><br>`+a.map(r=>`${esc(r.name)}: ${fmt(r.start)}–${fmt(r.end)}`).join('<br>')).addTo(layer);}
+ if(pts.length)map.fitBounds(pts,{padding:[30,30],maxZoom:6});
+}
+function reset(){$('q').value=$('from').value=$('to').value='';render()}
+['q','from','to','group'].forEach(i=>$(i).addEventListener('input',render));
+// ---- data + auth ----
+const KEYK='fp_admin_key';
+async function load(){const key=localStorage.getItem(KEYK);if(!key){$('login').style.display='flex';return}
+ $('status').textContent='Loading…';let r;try{r=await api({action:'admin',key})}catch(x){$('status').textContent='Network error';return}
+ if(!r.ok){localStorage.removeItem(KEYK);$('login').style.display='flex';$('lerr').textContent=r.error||'Unauthorized';$('status').textContent='';return}
+ $('login').style.display='none';DATA=r.rows;applyGeo();render();$('status').textContent='Updated '+new Date().toLocaleTimeString();geocodeAll();}
+$('lf').onsubmit=e=>{e.preventDefault();localStorage.setItem(KEYK,$('key').value.trim());$('key').value='';$('lerr').textContent='';load()};
+function logout(){localStorage.removeItem(KEYK);DATA=[];render();$('login').style.display='flex'}
+// ---- geocoding: Nominatim, cached in localStorage, max 1 req/s ----
+const GK='fp_geo_v1';const geo=JSON.parse(localStorage.getItem(GK)||'{}');
+function applyGeo(){DATA.forEach(r=>{const g=geo[ckey(r.city)];r.lat=g&&g[0];r.lon=g&&g[1];r.display=g&&g[2]})}
+let geoBusy=false;
+async function geocodeAll(){if(geoBusy)return;geoBusy=true;
+ const todo=[...new Set(DATA.map(r=>ckey(r.city)))].filter(k=>!(k in geo));
+ for(const k of todo){try{const u='https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(k);
+   const d=await (await fetch(u,{headers:{'Accept-Language':'en'}})).json();geo[k]=d[0]?[+d[0].lat,+d[0].lon,d[0].display_name]:[null,null,null];
+   localStorage.setItem(GK,JSON.stringify(geo));applyGeo();render();}catch(x){}
+  await new Promise(r=>setTimeout(r,1100));}
+ geoBusy=false;}
+function csv(){const q=v=>{v=(v??'')+'';if(/^[=+\-@]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"'};
+ const rows=[['name','contact','city','start','end','note','lat','lon','resolved_location','updated']].concat(filtered().map(r=>[r.name,r.contact,r.city,r.start,r.end,r.note,r.lat,r.lon,r.display,r.updated]));
+ const b=new Blob([rows.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='friends-'+new Date().toISOString().slice(0,10)+'.csv';a.click()}
+load();
+
+</script></body></html>

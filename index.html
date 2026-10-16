@@ -1,0 +1,73 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="noindex,nofollow"><meta name=referrer content=no-referrer>
+<title>Where will you be? ✈️</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--ink:#14161c;--mut:#6b7280;--acc:#2563eb;--acc2:#7c3aed;--line:#e5e7eb}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:640px;margin:0 auto;padding:24px 16px 60px}
+.hero{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border-radius:20px;padding:28px 22px;margin-bottom:18px}
+.hero h1{margin:0 0 6px;font-size:1.6rem}.hero p{margin:0;opacity:.92;line-height:1.45}
+.card{background:var(--card);border-radius:16px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px}
+label{display:block;font-size:.85rem;font-weight:600;color:#374151;margin:10px 0 4px}
+input{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:16px;background:#fff}
+input:focus{outline:2px solid #bfdbfe;border-color:var(--acc)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stop{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:12px;position:relative}
+.stop h3{margin:0;font-size:.95rem;color:var(--mut)}
+.rm{position:absolute;top:8px;right:10px;border:0;background:none;color:#ef4444;font-size:.85rem;cursor:pointer}
+.btn{display:block;width:100%;text-align:center;border:0;border-radius:12px;padding:14px 18px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none}
+.primary{background:var(--acc);color:#fff}.ghost{background:#eef2ff;color:var(--acc)}.danger{background:#fee2e2;color:#b91c1c}
+.btn:disabled{opacity:.6}
+.err{background:#fef2f2;color:#991b1b;border-radius:10px;padding:10px 14px;margin-bottom:12px}
+.ok{background:#ecfdf5;color:#065f46;border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.mut{color:var(--mut);font-size:.85rem}code{word-break:break-all;background:#f3f4f6;padding:2px 6px;border-radius:6px}
+.hide{display:none}
+</style></head><body><div class=wrap>
+<div class=hero><h1 id=h1>Hey! Where will you be? ✈️</h1><p>Rodrigo is on a work break and wants to come visit friends. Tell him where you'll be over the coming weeks/months. Only Rodrigo sees this — nobody else can.</p></div>
+<div id=msg></div>
+<form id=f class=card novalidate>
+<label for=name>Your name *</label><input id=name maxlength=80 required placeholder="e.g. Ana Silva" autocomplete=name>
+<label for=contact>Contact (optional)</label><input id=contact maxlength=160 placeholder="phone / email / IG">
+<h2 style="font-size:1.05rem;margin:20px 0 10px">Your stops</h2><div id=stops></div>
+<button type=button class="btn ghost" id=add>+ Add another place</button><div style="height:12px"></div>
+<button class="btn primary" id=go>Send to Rodrigo</button></form>
+<div id=delbox class="card hide"><button class="btn danger" id=del>Delete all my entries</button></div>
+<div id=done class="card hide"><b>Your personal edit link</b><p class=mut>Bookmark it to update or delete your entries later. Don't share it — anyone with it can edit your entries.</p>
+<p><code id=link></code></p><button class="btn ghost" id=copy>Copy link</button><div style="height:10px"></div><a class="btn primary" id=open>View / edit my entries</a></div>
+<p class=mut style="text-align:center">🔒 Private: only Rodrigo can see submissions.</p></div>
+<script src=config.js></script><script src=api.js></script>
+<script>
+const $=id=>document.getElementById(id);
+const token=(location.hash.match(/t=([a-f0-9]{64})/)||[])[1];
+function stopEl(s={}){const d=document.createElement('div');d.className='stop';
+ d.innerHTML=`<h3></h3><button type=button class=rm>Remove</button><label>City / location *</label><input class=city maxlength=120 placeholder="e.g. Lisbon, Portugal">
+ <div class=row2><div><label>From *</label><input type=date class=start></div><div><label>To *</label><input type=date class=end></div></div>
+ <label>Note (optional)</label><input class=note maxlength=300 placeholder="e.g. spare couch, busy weekdays">`;
+ ['city','start','end','note'].forEach(k=>d.querySelector('.'+k).value=s[k]||'');
+ d.querySelector('.rm').onclick=()=>{if($('stops').children.length>1)d.remove();else d.querySelectorAll('input').forEach(i=>i.value='');num()};
+ d.querySelector('.start').onchange=e=>{const en=d.querySelector('.end');if(!en.value||en.value<e.target.value)en.value=e.target.value;en.min=e.target.value};
+ $('stops').appendChild(d);num();}
+function num(){[...document.querySelectorAll('.stop h3')].forEach((h,i)=>h.textContent='Stop '+(i+1))}
+function show(html,cls){$('msg').innerHTML=html?`<div class=${cls}>${html}</div>`:'';if(html)scrollTo(0,0)}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+function collect(){return{name:$('name').value.trim(),contact:$('contact').value.trim(),stops:[...document.querySelectorAll('.stop')].map(d=>({city:d.querySelector('.city').value.trim(),start:d.querySelector('.start').value,end:d.querySelector('.end').value,note:d.querySelector('.note').value.trim()}))}}
+function check(b){const e=[];if(!b.name)e.push('Please enter your name.');let n=0;b.stops.forEach((s,i)=>{if(!s.city&&!s.start&&!s.end&&!s.note)return;n++;
+ if(!s.city)e.push(`Stop ${i+1}: city is required.`);else if(!s.start||!s.end)e.push(`Stop ${i+1}: please add both dates.`);else if(s.end<s.start)e.push(`Stop ${i+1}: end is before start.`)});
+ if(!n&&!e.length)e.push('Add at least one place and dates.');return e}
+$('add').onclick=()=>stopEl();
+$('f').onsubmit=async ev=>{ev.preventDefault();const b=collect(),e=check(b);if(e.length)return show(e.map(esc).join('<br>'),'err');
+ $('go').disabled=true;$('go').textContent='Saving…';
+ try{const r=await api(token?{action:'update',token,...b}:{action:'submit',...b});
+  if(!r.ok)return show(esc((r.errors||[r.error]).join(' ')),'err');
+  if(token)return show('✅ Saved! Rodrigo will see your updated plans.','ok');
+  const link=location.href.split('#')[0]+'#t='+r.token;$('link').textContent=link;$('open').href=link;$('open').onclick=()=>setTimeout(()=>location.reload(),50);
+  $('f').classList.add('hide');$('done').classList.remove('hide');$('h1').textContent=`Thanks, ${b.name}! 🙌`;show('');
+ }catch(x){show('Could not save — please check your connection and try again.','err')}
+ finally{$('go').disabled=false;$('go').textContent=token?'Save changes':'Send to Rodrigo'}};
+$('copy').onclick=()=>{navigator.clipboard.writeText($('link').textContent);$('copy').textContent='Copied!'};
+$('del').onclick=async()=>{if(!confirm('Delete all your entries?'))return;const r=await api({action:'delete',token});
+ if(r.ok){$('f').classList.add('hide');$('delbox').classList.add('hide');show('All your entries were removed. <a href="./">Start over</a>','ok')}else show(esc(r.error),'err')};
+(async()=>{if(!token){stopEl();return}
+ $('h1').textContent='Your plans ✏️';$('go').textContent='Save changes';$('delbox').classList.remove('hide');
+ try{const r=await api({action:'mine',token});if(!r.ok){show('This edit link is no longer valid. <a href="./">Start a new one</a>','err');$('f').classList.add('hide');$('delbox').classList.add('hide');return}
+  $('name').value=r.name;$('contact').value=r.contact;r.stops.forEach(s=>stopEl(s))}catch(x){show('Could not load your entries.','err');stopEl()}})();
+</script></body></html>
