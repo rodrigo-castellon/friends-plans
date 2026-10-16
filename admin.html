@@ -89,7 +89,7 @@ async function load(){const key=localStorage.getItem(KEYK);if(!key){document.que
  $('status').textContent='Loading…';try{DATA=await FP.adminLoad(key)}catch(x){$('status').textContent='Could not decrypt — wrong admin link?';return}
  applyGeo();render();$('status').textContent='Updated '+new Date().toLocaleTimeString();geocodeAll();}
 function logout(){localStorage.removeItem(KEYK);location.href=location.pathname}
-setInterval(load,120000);
+setInterval(load,120000);addEventListener('hashchange',()=>location.reload());
 // ---- geocoding: Nominatim, cached in localStorage, max 1 req/s ----
 const GK='fp_geo_v1';const geo=JSON.parse(localStorage.getItem(GK)||'{}');
 function applyGeo(){DATA.forEach(r=>{const g=geo[ckey(r.city)];r.lat=g&&g[0];r.lon=g&&g[1];r.display=g&&g[2]})}
