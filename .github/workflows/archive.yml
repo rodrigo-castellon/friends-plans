@@ -1,0 +1,41 @@
+name: archive-inbox
+on:
+  schedule: [{cron: "*/10 * * * *"}]
+  workflow_dispatch:
+permissions: {contents: write}
+concurrency: {group: archive, cancel-in-progress: false}
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy encrypted messages from relay into repo (durable)
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request
+          url = "https://ntfy.sh/fp-9c758d850612653521bce44d/json?poll=1&since=all"
+          req = urllib.request.Request(url, headers={"User-Agent": "friends-plans-archiver"})
+          lines = urllib.request.urlopen(req, timeout=30).read().decode().splitlines()
+          path = "data/msgs.jsonl"
+          seen = set()
+          for l in open(path):
+              try: seen.add(json.loads(l)["id"])
+              except Exception: pass
+          new = []
+          for l in lines:
+              try: o = json.loads(l)
+              except Exception: continue
+              if o.get("event") != "message" or o["id"] in seen or len(o.get("message", "")) > 4096: continue
+              try:
+                  m = json.loads(o["message"]); assert m.get("v") == 1 and m.get("sid")
+              except Exception: continue
+              new.append(json.dumps({"id": o["id"], "time": o["time"], "message": o["message"]}))
+          if new:
+              open(path, "a").write("\n".join(new) + "\n")
+          print("new:", len(new))
+          PY
+      - name: Commit
+        run: |
+          git config user.name "inbox-archiver"; git config user.email "actions@users.noreply.github.com"
+          git add data/msgs.jsonl
+          git diff --cached --quiet || (git commit -m "archive encrypted submissions" && git push)

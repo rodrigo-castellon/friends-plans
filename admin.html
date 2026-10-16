@@ -30,11 +30,8 @@ button,a.b{cursor:pointer}a.b.pr{background:var(--acc);color:#0b0d13;border:0;fo
 .leaflet-popup-content{color:#111}
 </style></head><body>
 <header><h1>🌍 Friends Map · Rodrigo's trip planner</h1>
-<div class=filters><span id=status style="color:var(--mut);font-size:.85rem;align-self:center"></span><button onclick="load()">↻ Refresh</button><button class="b pr" onclick="csv()">⬇ CSV</button><button onclick="logout()">Log out</button></div></header>
-<div id=login style="position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999">
-<form id=lf class=card style="width:min(380px,90vw)"><h2 style="color:var(--ink);font-size:1.1rem;text-transform:none">🔒 Admin key</h2>
-<input type=password id=key placeholder="Admin key" style="width:100%;margin-bottom:10px" autocomplete=current-password><div id=lerr style="color:#f87171;font-size:.85rem;margin-bottom:8px"></div>
-<button class="b pr" style="width:100%;padding:10px">Unlock</button><p style="color:var(--mut);font-size:.75rem">Stored only in this browser (localStorage).</p></form></div><main>
+<div class=filters><span id=status style="color:var(--mut);font-size:.85rem;align-self:center"></span><button onclick="load()">↻ Refresh</button><button class="b pr" onclick="csv()">⬇ CSV</button><button onclick="if(confirm('Forget admin access on this device? You will need your admin link again.'))logout()">Forget device</button></div></header>
+<main>
 <div class=kpis><div class=kpi><b id=k1>–</b><span>Friends</span></div><div class=kpi><b id=k2>–</b><span>Stops</span></div><div class=kpi><b id=k3>–</b><span>Cities</span></div><div class=kpi><b id=k4>–</b><span>Overlap cities</span></div><div class=kpi><b id=k5>–</b><span>Next arrival</span></div></div>
 <div class="card filters"><input id=q placeholder="Search name, city, note…" style="flex:1;min-width:180px">
 <label style="color:var(--mut);font-size:.85rem;align-self:center">From</label><input type=date id=from><label style="color:var(--mut);font-size:.85rem;align-self:center">To</label><input type=date id=to>
@@ -43,7 +40,7 @@ button,a.b{cursor:pointer}a.b.pr{background:var(--acc);color:#0b0d13;border:0;fo
 <div class=grid><div class=card><h2>Map</h2><div id=map></div></div>
 <div class=card><h2>By city · date</h2><div id=list></div></div></div>
 </main>
-<script src=config.js></script><script src=api.js></script>
+<script src=store.js></script>
 <script>
 let DATA=[];const $=id=>document.getElementById(id);
 const esc=s=>(s??'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -86,14 +83,13 @@ function render(){const rows=filtered();const ov=overlaps(rows);const today=new 
 }
 function reset(){$('q').value=$('from').value=$('to').value='';render()}
 ['q','from','to','group'].forEach(i=>$(i).addEventListener('input',render));
-// ---- data + auth ----
-const KEYK='fp_admin_key';
-async function load(){const key=localStorage.getItem(KEYK);if(!key){$('login').style.display='flex';return}
- $('status').textContent='Loading…';let r;try{r=await api({action:'admin',key})}catch(x){$('status').textContent='Network error';return}
- if(!r.ok){localStorage.removeItem(KEYK);$('login').style.display='flex';$('lerr').textContent=r.error||'Unauthorized';$('status').textContent='';return}
- $('login').style.display='none';DATA=r.rows;applyGeo();render();$('status').textContent='Updated '+new Date().toLocaleTimeString();geocodeAll();}
-$('lf').onsubmit=e=>{e.preventDefault();localStorage.setItem(KEYK,$('key').value.trim());$('key').value='';$('lerr').textContent='';load()};
-function logout(){localStorage.removeItem(KEYK);DATA=[];render();$('login').style.display='flex'}
+// ---- data + auth: private key comes from the link hash (#k=...), remembered in this browser ----
+const KEYK='fp_admin_pk';{const m=location.hash.match(/k=([A-Za-z0-9_-]+)/);if(m)localStorage.setItem(KEYK,m[1]);}
+async function load(){const key=localStorage.getItem(KEYK);if(!key){document.querySelector('main').innerHTML='<div class=empty>🔒 Private page. Open your personal admin link.</div>';return}
+ $('status').textContent='Loading…';try{DATA=await FP.adminLoad(key)}catch(x){$('status').textContent='Could not decrypt — wrong admin link?';return}
+ applyGeo();render();$('status').textContent='Updated '+new Date().toLocaleTimeString();geocodeAll();}
+function logout(){localStorage.removeItem(KEYK);location.href=location.pathname}
+setInterval(load,120000);
 // ---- geocoding: Nominatim, cached in localStorage, max 1 req/s ----
 const GK='fp_geo_v1';const geo=JSON.parse(localStorage.getItem(GK)||'{}');
 function applyGeo(){DATA.forEach(r=>{const g=geo[ckey(r.city)];r.lat=g&&g[0];r.lon=g&&g[1];r.display=g&&g[2]})}

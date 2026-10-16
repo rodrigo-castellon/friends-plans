@@ -34,10 +34,11 @@ input:focus{outline:2px solid #bfdbfe;border-color:var(--acc)}
 <div id=done class="card hide"><b>Your personal edit link</b><p class=mut>Bookmark it to update or delete your entries later. Don't share it — anyone with it can edit your entries.</p>
 <p><code id=link></code></p><button class="btn ghost" id=copy>Copy link</button><div style="height:10px"></div><a class="btn primary" id=open>View / edit my entries</a></div>
 <p class=mut style="text-align:center">🔒 Private: only Rodrigo can see submissions.</p></div>
-<script src=config.js></script><script src=api.js></script>
+<script src=store.js></script>
 <script>
 const $=id=>document.getElementById(id);
 const token=(location.hash.match(/t=([a-f0-9]{64})/)||[])[1];
+const clip=(s,n)=>String(s||'').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,n);
 function stopEl(s={}){const d=document.createElement('div');d.className='stop';
  d.innerHTML=`<h3></h3><button type=button class=rm>Remove</button><label>City / location *</label><input class=city maxlength=120 placeholder="e.g. Lisbon, Portugal">
  <div class=row2><div><label>From *</label><input type=date class=start></div><div><label>To *</label><input type=date class=end></div></div>
@@ -56,18 +57,18 @@ function check(b){const e=[];if(!b.name)e.push('Please enter your name.');let n=
 $('add').onclick=()=>stopEl();
 $('f').onsubmit=async ev=>{ev.preventDefault();const b=collect(),e=check(b);if(e.length)return show(e.map(esc).join('<br>'),'err');
  $('go').disabled=true;$('go').textContent='Saving…';
- try{const r=await api(token?{action:'update',token,...b}:{action:'submit',...b});
-  if(!r.ok)return show(esc((r.errors||[r.error]).join(' ')),'err');
+ try{const tok=token||FP.newToken();const p={name:clip(b.name,80),contact:clip(b.contact,160),stops:b.stops.filter(x=>x.city).slice(0,12).map(x=>({city:clip(x.city,120),start:x.start,end:x.end,note:clip(x.note,200)}))};
+  await FP.post(await FP.seal(tok,p));
   if(token)return show('✅ Saved! Rodrigo will see your updated plans.','ok');
-  const link=location.href.split('#')[0]+'#t='+r.token;$('link').textContent=link;$('open').href=link;$('open').onclick=()=>setTimeout(()=>location.reload(),50);
+  const link=location.href.split('#')[0]+'#t='+tok;$('link').textContent=link;$('open').href=link;$('open').onclick=()=>setTimeout(()=>location.reload(),50);
   $('f').classList.add('hide');$('done').classList.remove('hide');$('h1').textContent=`Thanks, ${b.name}! 🙌`;show('');
- }catch(x){show('Could not save — please check your connection and try again.','err')}
+ }catch(x){show(x.message==='too_long'?'That\'s a lot of text — please shorten notes or split into two submissions.':'Could not save — please check your connection and try again.','err')}
  finally{$('go').disabled=false;$('go').textContent=token?'Save changes':'Send to Rodrigo'}};
 $('copy').onclick=()=>{navigator.clipboard.writeText($('link').textContent);$('copy').textContent='Copied!'};
-$('del').onclick=async()=>{if(!confirm('Delete all your entries?'))return;const r=await api({action:'delete',token});
- if(r.ok){$('f').classList.add('hide');$('delbox').classList.add('hide');show('All your entries were removed. <a href="./">Start over</a>','ok')}else show(esc(r.error),'err')};
+$('del').onclick=async()=>{if(!confirm('Delete all your entries?'))return;try{await FP.post(await FP.seal(token,{deleted:true,stops:[]}));
+ $('f').classList.add('hide');$('delbox').classList.add('hide');show('All your entries were removed. <a href="./">Start over</a>','ok')}catch(x){show('Could not delete, try again.','err')}};
 (async()=>{if(!token){stopEl();return}
  $('h1').textContent='Your plans ✏️';$('go').textContent='Save changes';$('delbox').classList.remove('hide');
- try{const r=await api({action:'mine',token});if(!r.ok){show('This edit link is no longer valid. <a href="./">Start a new one</a>','err');$('f').classList.add('hide');$('delbox').classList.add('hide');return}
+ try{const r=await FP.mine(token);if(!r||r.deleted){show('This edit link is no longer valid. <a href="./">Start a new one</a>','err');$('f').classList.add('hide');$('delbox').classList.add('hide');return}
   $('name').value=r.name;$('contact').value=r.contact;r.stops.forEach(s=>stopEl(s))}catch(x){show('Could not load your entries.','err');stopEl()}})();
 </script></body></html>
