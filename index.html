@@ -58,17 +58,18 @@ $('add').onclick=()=>stopEl();
 $('f').onsubmit=async ev=>{ev.preventDefault();const b=collect(),e=check(b);if(e.length)return show(e.map(esc).join('<br>'),'err');
  $('go').disabled=true;$('go').textContent='Saving…';
  try{const tok=token||FP.newToken();const p={name:clip(b.name,80),contact:clip(b.contact,160),stops:b.stops.filter(x=>x.city).slice(0,12).map(x=>({city:clip(x.city,120),start:x.start,end:x.end,note:clip(x.note,200)}))};
-  await FP.post(await FP.seal(tok,p));
+  await FP.post(await FP.seal(tok,p));try{localStorage.setItem('fp_mine_'+tok,JSON.stringify(p))}catch(e){}
   if(token)return show('✅ Saved! Rodrigo will see your updated plans.','ok');
   const link=location.href.split('#')[0]+'#t='+tok;$('link').textContent=link;$('open').href=link;$('open').onclick=()=>setTimeout(()=>location.reload(),50);
   $('f').classList.add('hide');$('done').classList.remove('hide');$('h1').textContent=`Thanks, ${b.name}! 🙌`;show('');
  }catch(x){show(x.message==='too_long'?'That\'s a lot of text — please shorten notes or split into two submissions.':'Could not save — please check your connection and try again.','err')}
  finally{$('go').disabled=false;$('go').textContent=token?'Save changes':'Send to Rodrigo'}};
 $('copy').onclick=()=>{navigator.clipboard.writeText($('link').textContent);$('copy').textContent='Copied!'};
-$('del').onclick=async()=>{if(!confirm('Delete all your entries?'))return;try{await FP.post(await FP.seal(token,{deleted:true,stops:[]}));
+$('del').onclick=async()=>{if(!confirm('Delete all your entries?'))return;try{await FP.post(await FP.seal(token,{deleted:true,stops:[]}));localStorage.removeItem('fp_mine_'+token);
  $('f').classList.add('hide');$('delbox').classList.add('hide');show('All your entries were removed. <a href="./">Start over</a>','ok')}catch(x){show('Could not delete, try again.','err')}};
 (async()=>{if(!token){stopEl();return}
  $('h1').textContent='Your plans ✏️';$('go').textContent='Save changes';$('delbox').classList.remove('hide');
- try{const r=await FP.mine(token);if(!r||r.deleted){show('This edit link is no longer valid. <a href="./">Start a new one</a>','err');$('f').classList.add('hide');$('delbox').classList.add('hide');return}
+ try{let r=await FP.mine(token);if(!r){await new Promise(z=>setTimeout(z,3000));r=await FP.mine(token)}
+  const loc=JSON.parse(localStorage.getItem('fp_mine_'+token)||'null');if(loc&&(!r||r.deleted))r=loc;if(!r||r.deleted){show('This edit link is no longer valid. <a href="./">Start a new one</a>','err');$('f').classList.add('hide');$('delbox').classList.add('hide');return}
   $('name').value=r.name;$('contact').value=r.contact;r.stops.forEach(s=>stopEl(s))}catch(x){show('Could not load your entries.','err');stopEl()}})();
 </script></body></html>
